@@ -1,10 +1,10 @@
 require("dotenv").config();
-const { Client, GatewayIntentBits } = require("discord.js");
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require("discord.js");
 const express = require("express");
 const axios = require("axios");
 
 // ============================
-// EXPRESS SERVER (RENDER)
+// EXPRESS (Keep Alive for Render)
 // ============================
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,7 +33,7 @@ client.once("ready", () => {
 });
 
 // ============================
-// BIBLE API FUNCTIONS
+// HELPER FUNCTIONS
 // ============================
 async function getRandomVerse() {
   const res = await axios.get("https://bible-api.com/?random=verse");
@@ -48,41 +48,59 @@ async function getVerse(reference) {
 }
 
 // ============================
-// MESSAGE COMMAND HANDLER
+// SLASH COMMAND SETUP
 // ============================
-client.on("messageCreate", async (message) => {
-  if (message.author.bot) return;
 
-  // !verse (random)
-  if (message.content === "!verse") {
-    try {
-      const verse = await getRandomVerse();
-      await message.reply(
-        `📖 **${verse.reference}**\n${verse.text}`
-      );
-    } catch (error) {
-      message.reply("⚠️ Unable to fetch a verse right now.");
-    }
+const commands = [
+  new SlashCommandBuilder()
+    .setName("verse")
+    .setDescription("Get a Bible verse")
+    .addStringOption(option =>
+      option.setName("reference")
+        .setDescription("Optional: specify a verse, e.g. John 3:16")
+        .setRequired(false)
+    )
+].map(command => command.toJSON());
+
+const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+
+(async () => {
+  try {
+    console.log("🔄 Registering slash commands...");
+    await rest.put(
+      Routes.applicationCommands(process.env.CLIENT_ID), // Your Bot Application ID
+      { body: commands },
+    );
+    console.log("✅ Slash commands registered");
+  } catch (error) {
+    console.error(error);
   }
+})();
 
-  // !verse John 3:16
-  if (message.content.startsWith("!verse ")) {
-    const reference = message.content.slice(7);
+// ============================
+// COMMAND HANDLER
+// ============================
+client.on("interactionCreate", async interaction => {
+  if (!interaction.isCommand()) return;
+
+  if (interaction.commandName === "verse") {
+    const reference = interaction.options.getString("reference");
 
     try {
-      const verse = await getVerse(reference);
-      await message.reply(
-        `📖 **${verse.reference}**\n${verse.text}`
-      );
+      let verseData;
+      if (reference) {
+        verseData = await getVerse(reference);
+      } else {
+        verseData = await getRandomVerse();
+      }
+      await interaction.reply(`📖 **${verseData.reference}**\n${verseData.text}`);
     } catch (error) {
-      message.reply(
-        "⚠️ Verse not found. Example: `!verse John 3:16`"
-      );
+      await interaction.reply("⚠️ Could not find that verse. Try `John 3:16`");
     }
   }
 });
 
 // ============================
-// BOT LOGIN
+// LOGIN
 // ============================
 client.login(process.env.TOKEN);
