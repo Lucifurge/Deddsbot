@@ -62,8 +62,8 @@ async function safeVerse() {
 
 async function safeMeme() {
   try {
-    const r = await axios.get("https://meme-api.com/gimme", { timeout: 4000 });
-    return r.data;
+    const rDiscord = await axios.get("https://meme-api.com/gimme", { timeout: 4000 });
+    return rDiscord.data;
   } catch {
     return null;
   }
@@ -162,6 +162,10 @@ client.on("interactionCreate", async i => {
       case "setdailychannel":
         verseChannels[i.guildId] = i.options.getChannel("channel").id;
         save(verseFile, verseChannels);
+        // send immediately when set
+        const cVerse = await client.channels.fetch(verseChannels[i.guildId]);
+        const firstVerse = await safeVerse();
+        if (cVerse && firstVerse) cVerse.send(`📖 **Daily Verse**\n**${firstVerse.reference}**\n${firstVerse.text}`);
         return i.reply("✅ Daily verse channel set");
       case "setmemeschannel":
         memeChannels[i.guildId] = i.options.getChannel("channel").id;
@@ -180,16 +184,18 @@ client.on("interactionCreate", async i => {
    BACKGROUND JOBS
 ========================= */
 function startJobs() {
+  // Daily Verse: every 24h
   setInterval(async () => {
     for (const g in verseChannels) {
       try {
         const c = await client.channels.fetch(verseChannels[g]);
         const v = await safeVerse();
-        if (c && v) c.send(`📖 **${v.reference}**\n${v.text}`);
+        if (c && v) c.send(`📖 **Daily Verse**\n**${v.reference}**\n${v.text}`);
       } catch {}
     }
-  }, 60 * 60 * 1000); // hourly
+  }, 24 * 60 * 60 * 1000); // 24h
 
+  // Meme every 1 minute
   setInterval(async () => {
     for (const g in memeChannels) {
       try {
@@ -198,7 +204,7 @@ function startJobs() {
         if (c && m) c.send({ content: m.title, files: [m.url] });
       } catch {}
     }
-  }, 10 * 60 * 1000); // every 10 min
+  }, 60 * 1000); // 1 minute
 }
 
 /* =========================
