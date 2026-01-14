@@ -1,5 +1,11 @@
 require("dotenv").config();
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require("discord.js");
+const { 
+  Client, 
+  GatewayIntentBits, 
+  REST, 
+  Routes, 
+  SlashCommandBuilder 
+} = require("discord.js");
 const express = require("express");
 const axios = require("axios");
 const fs = require("fs");
@@ -15,18 +21,17 @@ process.on("uncaughtException", err => console.error("Uncaught:", err));
    EXPRESS KEEP-ALIVE
 ========================= */
 const app = express();
-app.get("/", (req, res) => {
-  console.log(`Ping received at ${new Date().toLocaleTimeString()}`);
-  res.send("Bot is alive");
-});
-app.listen(process.env.PORT || 3000, () => {
-  console.log("✅ Express server running");
-});
+app.get("/", (req, res) => res.send("Bot is alive"));
+app.listen(process.env.PORT || 3000, () =>
+  console.log("✅ Express running")
+);
 
 /* =========================
    DISCORD CLIENT
 ========================= */
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds]
+});
 
 /* =========================
    START TIME
@@ -36,30 +41,27 @@ const startTime = Date.now();
 /* =========================
    STORAGE FILES
 ========================= */
-const verseFile = path.join(__dirname, "dailyChannels.json");
-const memeFile = path.join(__dirname, "memeChannels.json");
+const verseChannelFile = path.join(__dirname, "dailyChannels.json");
+const memeChannelFile = path.join(__dirname, "memeChannels.json");
+const customVerseFile = path.join(__dirname, "customVerses.json");
 
 const load = f => fs.existsSync(f) ? JSON.parse(fs.readFileSync(f)) : {};
 const save = (f, d) => fs.writeFileSync(f, JSON.stringify(d, null, 2));
 
-let verseChannels = load(verseFile);
-let memeChannels = load(memeFile);
+let verseChannels = load(verseChannelFile);
+let memeChannels = load(memeChannelFile);
+let customVerses = load(customVerseFile);
 
 /* =========================
-   SAFE API HELPERS
+   SAFE MEME API
 ========================= */
-async function safeVerse() {
-  try {
-    const r = await axios.get("https://bible-api.com/?random=verse", { timeout: 4000 });
-    return r.data;
-  } catch { return null; }
-}
-
 async function safeMeme() {
   try {
-    const r = await axios.get("https://meme-api.com/gimme", { timeout: 4000 });
+    const r = await axios.get("https://meme-api.com/gimme", { timeout: 5000 });
     return r.data;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 /* =========================
@@ -67,21 +69,34 @@ async function safeMeme() {
 ========================= */
 const commands = [
   new SlashCommandBuilder().setName("ping").setDescription("Check bot status"),
-  new SlashCommandBuilder().setName("help").setDescription("Show all commands"),
   new SlashCommandBuilder().setName("uptime").setDescription("Bot uptime"),
-  new SlashCommandBuilder().setName("serverinfo").setDescription("Server info"),
-  new SlashCommandBuilder().setName("userinfo").setDescription("Get info about a user")
-    .addUserOption(o => o.setName("user").setDescription("Select user").setRequired(false)),
-  new SlashCommandBuilder().setName("avatar").setDescription("Get a user's avatar")
-    .addUserOption(o => o.setName("user").setDescription("Select user").setRequired(false)),
-  new SlashCommandBuilder().setName("coinflip").setDescription("Flip a coin"),
-  new SlashCommandBuilder().setName("roll").setDescription("Roll a dice"),
-  new SlashCommandBuilder().setName("meme").setDescription("Send a meme"),
-  new SlashCommandBuilder().setName("verse").setDescription("Get a Bible verse"),
-  new SlashCommandBuilder().setName("setdailychannel").setDescription("Set the channel for daily Bible verses")
-    .addChannelOption(o => o.setName("channel").setDescription("Channel for daily verses").setRequired(true)),
-  new SlashCommandBuilder().setName("setmemeschannel").setDescription("Set the channel for automatic memes")
-    .addChannelOption(o => o.setName("channel").setDescription("Channel for memes").setRequired(true))
+  new SlashCommandBuilder().setName("help").setDescription("Show commands"),
+
+  new SlashCommandBuilder()
+    .setName("setdailychannel")
+    .setDescription("Set daily verse channel")
+    .addChannelOption(o =>
+      o.setName("channel").setDescription("Channel").setRequired(true)
+    ),
+
+  new SlashCommandBuilder()
+    .setName("setmemeschannel")
+    .setDescription("Set meme channel")
+    .addChannelOption(o =>
+      o.setName("channel").setDescription("Channel").setRequired(true)
+    ),
+
+  new SlashCommandBuilder()
+    .setName("setdailyverse")
+    .setDescription("Set the verse that will post daily")
+    .addStringOption(o =>
+      o.setName("reference").setDescription("Verse reference").setRequired(true)
+    )
+    .addStringOption(o =>
+      o.setName("text").setDescription("Verse text").setRequired(true)
+    ),
+
+  new SlashCommandBuilder().setName("meme").setDescription("Get a meme"),
 ].map(c => c.toJSON());
 
 /* =========================
@@ -89,12 +104,11 @@ const commands = [
 ========================= */
 const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 (async () => {
-  try {
-    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
-    console.log("✅ Commands registered");
-  } catch (e) {
-    console.error("Command register error:", e);
-  }
+  await rest.put(
+    Routes.applicationCommands(process.env.CLIENT_ID),
+    { body: commands }
+  );
+  console.log("✅ Commands registered");
 })();
 
 /* =========================
@@ -102,45 +116,49 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 ========================= */
 client.on("interactionCreate", async i => {
   if (!i.isCommand()) return;
+
   try {
     switch (i.commandName) {
-      case "ping": return i.reply("🟢 Bot Online");
-      case "help": return i.reply("**📜 Commands**\n/ping\n/help\n/uptime\n/serverinfo\n/userinfo\n/avatar\n/verse\n/meme\n/coinflip\n/roll\n/setdailychannel\n/setmemeschannel");
-      case "uptime": return i.reply(`⏱ Uptime: ${Math.floor((Date.now()-startTime)/1000)}s`);
-      case "serverinfo": return i.reply(`🏠 ${i.guild.name}\n👥 Members: ${i.guild.memberCount}`);
-      case "userinfo": {
-        const user = i.options.getUser("user") || i.user;
-        return i.reply(`👤 ${user.tag}\n🆔 ${user.id}`);
-      }
-      case "avatar": {
-        const user = i.options.getUser("user") || i.user;
-        return i.reply(user.displayAvatarURL({ size: 512 }));
-      }
-      case "coinflip": return i.reply(Math.random() < 0.5 ? "🪙 Heads" : "🪙 Tails");
-      case "roll": return i.reply(`🎲 Rolled: ${Math.floor(Math.random()*6)+1}`);
+
+      case "ping":
+        return i.reply("🟢 Bot Online");
+
+      case "uptime":
+        return i.reply(`⏱ Uptime: ${Math.floor((Date.now() - startTime) / 1000)}s`);
+
+      case "help":
+        return i.reply(
+          "**📜 Commands**\n" +
+          "/ping\n/uptime\n/meme\n" +
+          "/setdailychannel\n/setdailyverse\n/setmemeschannel"
+        );
+
+      case "setdailychannel":
+        verseChannels[i.guildId] = i.options.getChannel("channel").id;
+        save(verseChannelFile, verseChannels);
+        return i.reply("✅ Daily verse channel set");
+
+      case "setmemeschannel":
+        memeChannels[i.guildId] = i.options.getChannel("channel").id;
+        save(memeChannelFile, memeChannels);
+        return i.reply("✅ Meme channel set");
+
+      case "setdailyverse":
+        customVerses[i.guildId] = {
+          reference: i.options.getString("reference"),
+          text: i.options.getString("text")
+        };
+        save(customVerseFile, customVerses);
+        return i.reply("📖 Daily verse saved");
+
       case "meme": {
         const m = await safeMeme();
-        return i.reply(m ? { content: m.title, files: [m.url] } : "No meme available");
+        return i.reply(m ? { files: [m.url] } : "No meme available");
       }
-      case "verse": {
-        const v = await safeVerse();
-        return i.reply(v ? `📖 **${v.reference}**\n${v.text}` : "Verse unavailable");
-      }
-      case "setdailychannel": {
-        verseChannels[i.guildId] = i.options.getChannel("channel").id;
-        save(verseFile, verseChannels);
-        return i.reply("✅ Daily verse channel set!");
-      }
-      case "setmemeschannel": {
-        memeChannels[i.guildId] = i.options.getChannel("channel").id;
-        save(memeFile, memeChannels);
-        return i.reply("✅ Meme channel set!");
-      }
-      default: return i.reply("⚠️ Unknown command");
     }
   } catch (e) {
     console.error(e);
-    if (!i.replied) i.reply("⚠️ Error handled safely");
+    if (!i.replied) i.reply("⚠️ Error handled");
   }
 });
 
@@ -148,27 +166,41 @@ client.on("interactionCreate", async i => {
    BACKGROUND JOBS
 ========================= */
 function startJobs() {
-  // Daily verse
+
+  // DAILY CUSTOM VERSE (24 HOURS)
   setInterval(async () => {
     for (const g in verseChannels) {
       try {
-        const c = await client.channels.fetch(verseChannels[g]);
-        const v = await safeVerse();
-        if (c && v) c.send(`📖 **${v.reference}**\n${v.text}`);
-      } catch (e) { console.error("Verse job error:", e); }
-    }
-  }, 24*60*60*1000);
+        const channel = await client.channels.fetch(verseChannels[g]);
+        const verse = customVerses[g];
+        if (!channel || !verse) continue;
 
-  // Memes every 1 min
+        channel.send(
+          `📖 **${verse.reference}**\n${verse.text}`
+        );
+      } catch (e) {
+        console.error("Verse job error:", e);
+      }
+    }
+  }, 24 * 60 * 60 * 1000);
+
+  // MEMES EVERY 1 HOUR
   setInterval(async () => {
     for (const g in memeChannels) {
       try {
-        const c = await client.channels.fetch(memeChannels[g]);
-        const m = await safeMeme();
-        if (c && m) c.send({ content: m.title, files: [m.url] });
-      } catch (e) { console.error("Meme job error:", e); }
+        const channel = await client.channels.fetch(memeChannels[g]);
+        const meme = await safeMeme();
+        if (channel && meme) {
+          channel.send({
+            content: "😂 **Hourly Meme**",
+            files: [meme.url]
+          });
+        }
+      } catch (e) {
+        console.error("Meme job error:", e);
+      }
     }
-  }, 60*1000);
+  }, 60 * 60 * 1000);
 }
 
 /* =========================
