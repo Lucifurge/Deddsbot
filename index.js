@@ -1,168 +1,230 @@
 require("dotenv").config();
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require("discord.js");
+const { 
+  Client, 
+  GatewayIntentBits, 
+  REST, 
+  Routes, 
+  SlashCommandBuilder 
+} = require("discord.js");
 const express = require("express");
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 
-// ============================
-// EXPRESS (Keep Alive for Render)
-// ============================
+/* =========================
+   CRASH PROTECTION
+========================= */
+process.on("unhandledRejection", err => console.error("Unhandled:", err));
+process.on("uncaughtException", err => console.error("Uncaught:", err));
+
+/* =========================
+   EXPRESS KEEP-ALIVE
+========================= */
 const app = express();
-const PORT = process.env.PORT || 3000;
+app.get("/", (_, res) => res.send("Bot is alive"));
+app.listen(process.env.PORT || 3000);
 
-app.get("/", (req, res) => {
-  res.send("📖 Dedd's Official Discord Bot is running!");
-});
-
-app.listen(PORT, () => {
-  console.log(`🌐 Web server running on port ${PORT}`);
-});
-
-// ============================
-// DISCORD CLIENT
-// ============================
+/* =========================
+   DISCORD CLIENT
+========================= */
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-  ],
+  intents: [GatewayIntentBits.Guilds],
 });
 
-// ============================
-// HELPER FUNCTIONS
-// ============================
-async function getRandomVerse() {
-  try {
-    const res = await axios.get("https://bible-api.com/?random=verse", { timeout: 5000 });
-    return res.data;
-  } catch (err) {
-    console.error("Bible API error:", err.message);
-    return { reference: "Error", text: "Could not fetch verse." };
-  }
-}
+/* =========================
+   START TIME (UPTIME)
+========================= */
+const startTime = Date.now();
 
-async function getVerse(reference) {
-  try {
-    const res = await axios.get(`https://bible-api.com/${encodeURIComponent(reference)}`, { timeout: 5000 });
-    return res.data;
-  } catch (err) {
-    console.error("Bible API error:", err.message);
-    return { reference: "Error", text: "Could not fetch verse. Check your reference." };
-  }
-}
+/* =========================
+   STORAGE FILES
+========================= */
+const verseFile = path.join(__dirname, "dailyChannels.json");
+const memeFile = path.join(__dirname, "memeChannels.json");
 
-// ============================
-// PERSISTENT DAILY CHANNEL STORAGE
-// ============================
-const dataFile = path.join(__dirname, "dailyChannels.json");
-let dailyChannels = {};
+const load = f => fs.existsSync(f) ? JSON.parse(fs.readFileSync(f)) : {};
+const save = (f, d) => fs.writeFileSync(f, JSON.stringify(d, null, 2));
 
-// Load channels from file
-if (fs.existsSync(dataFile)) {
+let verseChannels = load(verseFile);
+let memeChannels = load(memeFile);
+
+/* =========================
+   SAFE API HELPERS
+========================= */
+async function safeVerse() {
   try {
-    dailyChannels = JSON.parse(fs.readFileSync(dataFile, "utf-8"));
+    const r = await axios.get("https://bible-api.com/?random=verse", { timeout: 4000 });
+    return r.data;
   } catch {
-    dailyChannels = {};
+    return null;
   }
 }
 
-// Save channels to file
-function saveChannels() {
-  fs.writeFileSync(dataFile, JSON.stringify(dailyChannels, null, 2));
+async function safeMeme() {
+  try {
+    const r = await axios.get("https://meme-api.com/gimme", { timeout: 4000 });
+    return r.data;
+  } catch {
+    return null;
+  }
 }
 
-// ============================
-// SLASH COMMANDS
-// ============================
+/* =========================
+   SLASH COMMANDS
+========================= */
 const commands = [
-  new SlashCommandBuilder()
-    .setName("verse")
-    .setDescription("Get a Bible verse")
-    .addStringOption(opt => opt.setName("reference").setDescription("e.g. John 3:16").setRequired(false)),
+  new SlashCommandBuilder().setName("ping").setDescription("Bot status"),
+  new SlashCommandBuilder().setName("help").setDescription("Show all commands"),
+  new SlashCommandBuilder().setName("uptime").setDescription("Bot uptime"),
+  new SlashCommandBuilder().setName("serverinfo").setDescription("Server info"),
 
   new SlashCommandBuilder()
-    .setName("ping")
-    .setDescription("Check if the bot is online"),
+    .setName("userinfo")
+    .setDescription("User info")
+    .addUserOption(o => o.setName("user").setDescription("Select user")),
 
   new SlashCommandBuilder()
-    .setName("say")
-    .setDescription("Bot repeats your message")
-    .addStringOption(opt => opt.setName("message").setDescription("Message to repeat").setRequired(true)),
+    .setName("avatar")
+    .setDescription("User avatar")
+    .addUserOption(o => o.setName("user").setDescription("Select user")),
+
+  new SlashCommandBuilder().setName("coinflip").setDescription("Flip a coin"),
+  new SlashCommandBuilder().setName("roll").setDescription("Roll a dice"),
+  new SlashCommandBuilder().setName("meme").setDescription("Send a meme"),
+  new SlashCommandBuilder().setName("verse").setDescription("Bible verse"),
 
   new SlashCommandBuilder()
     .setName("setdailychannel")
-    .setDescription("Set the channel for daily Bible verses")
-    .addChannelOption(opt => opt.setName("channel").setDescription("Channel for daily verse").setRequired(true))
+    .setDescription("Set daily verse channel")
+    .addChannelOption(o => o.setName("channel").setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName("setmemeschannel")
+    .setDescription("Set auto meme channel")
+    .addChannelOption(o => o.setName("channel").setRequired(true))
 ].map(c => c.toJSON());
 
-const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+/* =========================
+   REGISTER COMMANDS
+========================= */
+const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
+
 (async () => {
   try {
-    console.log("🔄 Registering commands...");
-    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
+    await rest.put(
+      Routes.applicationCommands(process.env.CLIENT_ID),
+      { body: commands }
+    );
     console.log("✅ Commands registered");
-  } catch (err) {
-    console.error(err);
+  } catch (e) {
+    console.error("Command register error:", e);
   }
 })();
 
-// ============================
-// COMMAND HANDLER
-// ============================
-client.on("interactionCreate", async interaction => {
-  if (!interaction.isCommand()) return;
-
-  const guildId = interaction.guildId;
+/* =========================
+   COMMAND HANDLER
+========================= */
+client.on("interactionCreate", async i => {
+  if (!i.isCommand()) return;
 
   try {
-    if (interaction.commandName === "verse") {
-      const reference = interaction.options.getString("reference");
-      const verse = reference ? await getVerse(reference) : await getRandomVerse();
-      await interaction.reply(`📖 **${verse.reference}**\n${verse.text}`);
+    if (i.commandName === "ping")
+      return i.reply("🟢 Bot Online");
+
+    if (i.commandName === "help")
+      return i.reply(
+        "**📜 Commands**\n" +
+        "/ping\n/help\n/uptime\n/serverinfo\n/userinfo\n/avatar\n" +
+        "/verse\n/meme\n/coinflip\n/roll\n" +
+        "/setdailychannel\n/setmemeschannel"
+      );
+
+    if (i.commandName === "uptime") {
+      const seconds = Math.floor((Date.now() - startTime) / 1000);
+      return i.reply(`⏱ Uptime: ${seconds}s`);
     }
 
-    if (interaction.commandName === "ping") {
-      await interaction.reply("🏓 Pong! I'm online!");
+    if (i.commandName === "serverinfo")
+      return i.reply(`🏠 ${i.guild.name}\n👥 Members: ${i.guild.memberCount}`);
+
+    if (i.commandName === "userinfo") {
+      const user = i.options.getUser("user") || i.user;
+      return i.reply(`👤 ${user.tag}\n🆔 ${user.id}`);
     }
 
-    if (interaction.commandName === "say") {
-      const msg = interaction.options.getString("message");
-      await interaction.reply(msg);
+    if (i.commandName === "avatar") {
+      const user = i.options.getUser("user") || i.user;
+      return i.reply(user.displayAvatarURL({ size: 512 }));
     }
 
-    if (interaction.commandName === "setdailychannel") {
-      const channel = interaction.options.getChannel("channel");
-      dailyChannels[guildId] = channel.id;
-      saveChannels();
-      await interaction.reply(`✅ Daily Bible verses will be sent to ${channel}`);
+    if (i.commandName === "coinflip")
+      return i.reply(Math.random() < 0.5 ? "🪙 Heads" : "🪙 Tails");
+
+    if (i.commandName === "roll")
+      return i.reply(`🎲 Rolled: ${Math.floor(Math.random() * 6) + 1}`);
+
+    if (i.commandName === "meme") {
+      const m = await safeMeme();
+      return i.reply(m ? { content: m.title, files: [m.url] } : "No meme available");
     }
-  } catch (err) {
-    console.error("Command error:", err);
-    await interaction.reply("⚠️ Something went wrong while executing this command.");
+
+    if (i.commandName === "verse") {
+      const v = await safeVerse();
+      return i.reply(v ? `📖 **${v.reference}**\n${v.text}` : "Verse unavailable");
+    }
+
+    if (i.commandName === "setdailychannel") {
+      verseChannels[i.guildId] = i.options.getChannel("channel").id;
+      save(verseFile, verseChannels);
+      return i.reply("✅ Daily verse channel set");
+    }
+
+    if (i.commandName === "setmemeschannel") {
+      memeChannels[i.guildId] = i.options.getChannel("channel").id;
+      save(memeFile, memeChannels);
+      return i.reply("✅ Meme channel set");
+    }
+
+  } catch (e) {
+    console.error(e);
+    if (!i.replied) i.reply("⚠️ Error handled safely");
   }
 });
 
-// ============================
-// DAILY VERSE SENDER
-// ============================
-setInterval(async () => {
-  for (const guildId in dailyChannels) {
-    const channelId = dailyChannels[guildId];
-    try {
-      const channel = await client.channels.fetch(channelId);
-      if (!channel) continue;
-
-      const verse = await getRandomVerse();
-      await channel.send(`📖 **Daily Verse**\n**${verse.reference}**\n${verse.text}`);
-    } catch (err) {
-      console.error(`Failed sending daily verse to guild ${guildId}:`, err.message);
+/* =========================
+   BACKGROUND JOBS
+========================= */
+function startJobs() {
+  setInterval(async () => {
+    for (const g in verseChannels) {
+      try {
+        const c = await client.channels.fetch(verseChannels[g]);
+        const v = await safeVerse();
+        if (c && v) c.send(`📖 **${v.reference}**\n${v.text}`);
+      } catch {}
     }
-  }
-}, 60 * 60 * 1000); // every 1 hour (can set 24h)
+  }, 60 * 60 * 1000); // hourly
 
-// ============================
-// LOGIN
-// ============================
+  setInterval(async () => {
+    for (const g in memeChannels) {
+      try {
+        const c = await client.channels.fetch(memeChannels[g]);
+        const m = await safeMeme();
+        if (c && m) c.send({ content: m.title, files: [m.url] });
+      } catch {}
+    }
+  }, 10 * 60 * 1000); // every 10 min
+}
+
+/* =========================
+   READY
+========================= */
+client.once("ready", () => {
+  console.log(`✅ Logged in as ${client.user.tag}`);
+  startJobs();
+});
+
+/* =========================
+   LOGIN
+========================= */
 client.login(process.env.TOKEN);
