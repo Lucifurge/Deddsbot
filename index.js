@@ -10,7 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get("/", (req, res) => {
-  res.send("📖 Bible Discord Bot is running!");
+  res.send("📖 Dedd's Official Discord Bot is running!");
 });
 
 app.listen(PORT, () => {
@@ -50,7 +50,6 @@ async function getVerse(reference) {
 // ============================
 // SLASH COMMAND SETUP
 // ============================
-
 const commands = [
   new SlashCommandBuilder()
     .setName("verse")
@@ -59,6 +58,19 @@ const commands = [
       option.setName("reference")
         .setDescription("Optional: specify a verse, e.g. John 3:16")
         .setRequired(false)
+    ),
+
+  new SlashCommandBuilder()
+    .setName("ping")
+    .setDescription("Check if the bot is online"),
+
+  new SlashCommandBuilder()
+    .setName("say")
+    .setDescription("Bot repeats your message")
+    .addStringOption(option =>
+      option.setName("message")
+        .setDescription("Message for the bot to say")
+        .setRequired(true)
     )
 ].map(command => command.toJSON());
 
@@ -68,7 +80,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   try {
     console.log("🔄 Registering slash commands...");
     await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID), // Your Bot Application ID
+      Routes.applicationCommands(process.env.CLIENT_ID), 
       { body: commands },
     );
     console.log("✅ Slash commands registered");
@@ -83,6 +95,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 client.on("interactionCreate", async interaction => {
   if (!interaction.isCommand()) return;
 
+  // ========== Bible Commands ==========
   if (interaction.commandName === "verse") {
     const reference = interaction.options.getString("reference");
 
@@ -97,6 +110,16 @@ client.on("interactionCreate", async interaction => {
     } catch (error) {
       await interaction.reply("⚠️ Could not find that verse. Try `John 3:16`");
     }
+  }
+
+  // ========== Basic Discord Commands ==========
+  if (interaction.commandName === "ping") {
+    await interaction.reply("🏓 Pong! I'm online and ready!");
+  }
+
+  if (interaction.commandName === "say") {
+    const msg = interaction.options.getString("message");
+    await interaction.reply(msg);
   }
 });
 
