@@ -30,7 +30,7 @@ app.listen(process.env.PORT || 3000);
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 /* =========================
-   START TIME (UPTIME)
+   START TIME
 ========================= */
 const startTime = Date.now();
 
@@ -73,9 +73,9 @@ async function safeMeme() {
 async function generateDevotion() {
   try {
     const res = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo", // updated to gpt-3.5-turbo
+      model: "gpt-3.5-turbo", // safer free-tier model
       messages: [
-        { role: "system", content: "You are a Christian devotion writer. Provide a short, daily devotional with a Bible verse, reflection, and encouragement." },
+        { role: "system", content: "You are a Christian devotion writer. Provide a short daily devotional with a Bible verse, reflection, and encouragement." },
         { role: "user", content: "Write a short daily devotional for today." }
       ],
       max_tokens: 300
@@ -140,6 +140,9 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 client.on("interactionCreate", async i => {
   if (!i.isCommand()) return;
   try {
+    // Defer reply for long operations (OpenAI)
+    if (["setdevotionchannel"].includes(i.commandName)) await i.deferReply();
+
     switch (i.commandName) {
       case "ping": return i.reply("🟢 Bot Online");
       case "help": return i.reply(
@@ -184,7 +187,7 @@ client.on("interactionCreate", async i => {
         const c = await client.channels.fetch(devotionChannels[i.guildId]);
         const devotion = await generateDevotion();
         if (c && devotion) c.send(`📖 **Daily Devotion**\n${devotion}`);
-        return i.reply("✅ Devotion channel set!");
+        return i.editReply("✅ Devotion channel set!");
       }
       default: return i.reply("⚠️ Unknown command");
     }
@@ -207,7 +210,7 @@ function startJobs() {
         if (c && v) c.send(`📖 **${v.reference}**\n${v.text}`);
       } catch {}
     }
-  }, 24 * 60 * 60 * 1000); // every 24h
+  }, 24 * 60 * 60 * 1000);
 
   // Daily devotion
   setInterval(async () => {
@@ -218,7 +221,7 @@ function startJobs() {
         if (c && devotion) c.send(`📖 **Daily Devotion**\n${devotion}`);
       } catch {}
     }
-  }, 24 * 60 * 60 * 1000); // every 24h
+  }, 24 * 60 * 60 * 1000);
 
   // Memes every 1 min
   setInterval(async () => {
@@ -229,7 +232,7 @@ function startJobs() {
         if (c && m) c.send({ content: m.title, files: [m.url] });
       } catch {}
     }
-  }, 60 * 1000); // every 1 min
+  }, 60 * 1000);
 }
 
 /* =========================
