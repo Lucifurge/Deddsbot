@@ -28,10 +28,6 @@ const client = new Client({
   ],
 });
 
-client.once("ready", () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
-});
-
 // ============================
 // HELPER FUNCTIONS
 // ============================
@@ -46,6 +42,12 @@ async function getVerse(reference) {
   );
   return res.data;
 }
+
+// ============================
+// STORE DAILY VERSE CHANNEL
+// ============================
+// In memory (reset on restart). For persistent storage, you can use a database.
+let dailyVerseChannelId = null;
 
 // ============================
 // SLASH COMMAND SETUP
@@ -71,6 +73,15 @@ const commands = [
       option.setName("message")
         .setDescription("Message for the bot to say")
         .setRequired(true)
+    ),
+
+  new SlashCommandBuilder()
+    .setName("setdailychannel")
+    .setDescription("Set the channel for daily Bible verses")
+    .addChannelOption(option =>
+      option.setName("channel")
+        .setDescription("The channel where daily verses will be sent")
+        .setRequired(true)
     )
 ].map(command => command.toJSON());
 
@@ -95,7 +106,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 client.on("interactionCreate", async interaction => {
   if (!interaction.isCommand()) return;
 
-  // ========== Bible Commands ==========
+  // ---------- Bible Commands ----------
   if (interaction.commandName === "verse") {
     const reference = interaction.options.getString("reference");
 
@@ -112,7 +123,7 @@ client.on("interactionCreate", async interaction => {
     }
   }
 
-  // ========== Basic Discord Commands ==========
+  // ---------- Basic Discord Commands ----------
   if (interaction.commandName === "ping") {
     await interaction.reply("🏓 Pong! I'm online and ready!");
   }
@@ -121,7 +132,30 @@ client.on("interactionCreate", async interaction => {
     const msg = interaction.options.getString("message");
     await interaction.reply(msg);
   }
+
+  // ---------- Daily Verse Commands ----------
+  if (interaction.commandName === "setdailychannel") {
+    const channel = interaction.options.getChannel("channel");
+    dailyVerseChannelId = channel.id;
+    await interaction.reply(`✅ Daily Bible verses will be sent to ${channel}`);
+  }
 });
+
+// ============================
+// DAILY VERSE SENDER
+// ============================
+// Check every hour and send verse if channel is set
+setInterval(async () => {
+  if (!dailyVerseChannelId) return;
+
+  try {
+    const verse = await getRandomVerse();
+    const channel = await client.channels.fetch(dailyVerseChannelId);
+    channel.send(`📖 **Daily Verse**\n**${verse.reference}**\n${verse.text}`);
+  } catch (err) {
+    console.error("Failed to send daily verse:", err);
+  }
+}, 60 * 60 * 1000); // every 1 hour (can adjust as needed)
 
 // ============================
 // LOGIN
