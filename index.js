@@ -9,7 +9,7 @@ const express = require("express");
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
-const OpenAI = require("openai"); // FIXED
+const OpenAI = require("openai");
 
 /* =========================
    CRASH PROTECTION
@@ -51,7 +51,7 @@ let devotionChannels = load(devotionFile);
 /* =========================
    OPENAI CONFIG
 ========================= */
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY }); // FIXED
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 /* =========================
    SAFE API HELPERS
@@ -73,7 +73,7 @@ async function safeMeme() {
 async function generateDevotion() {
   try {
     const res = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo", // updated to gpt-3.5-turbo
       messages: [
         { role: "system", content: "You are a Christian devotion writer. Provide a short, daily devotional with a Bible verse, reflection, and encouragement." },
         { role: "user", content: "Write a short daily devotional for today." }
