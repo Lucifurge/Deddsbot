@@ -2,6 +2,8 @@ require("dotenv").config();
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require("discord.js");
 const express = require("express");
 const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
 
 // ============================
 // EXPRESS (Keep Alive for Render)
@@ -32,35 +34,53 @@ const client = new Client({
 // HELPER FUNCTIONS
 // ============================
 async function getRandomVerse() {
-  const res = await axios.get("https://bible-api.com/?random=verse");
-  return res.data;
+  try {
+    const res = await axios.get("https://bible-api.com/?random=verse", { timeout: 5000 });
+    return res.data;
+  } catch (err) {
+    console.error("Bible API error:", err.message);
+    return { reference: "Error", text: "Could not fetch verse." };
+  }
 }
 
 async function getVerse(reference) {
-  const res = await axios.get(
-    `https://bible-api.com/${encodeURIComponent(reference)}`
-  );
-  return res.data;
+  try {
+    const res = await axios.get(`https://bible-api.com/${encodeURIComponent(reference)}`, { timeout: 5000 });
+    return res.data;
+  } catch (err) {
+    console.error("Bible API error:", err.message);
+    return { reference: "Error", text: "Could not fetch verse. Check your reference." };
+  }
 }
 
 // ============================
-// STORE DAILY VERSE CHANNEL
+// PERSISTENT DAILY CHANNEL STORAGE
 // ============================
-// In memory (reset on restart). For persistent storage, you can use a database.
-let dailyVerseChannelId = null;
+const dataFile = path.join(__dirname, "dailyChannels.json");
+let dailyChannels = {};
+
+// Load channels from file
+if (fs.existsSync(dataFile)) {
+  try {
+    dailyChannels = JSON.parse(fs.readFileSync(dataFile, "utf-8"));
+  } catch {
+    dailyChannels = {};
+  }
+}
+
+// Save channels to file
+function saveChannels() {
+  fs.writeFileSync(dataFile, JSON.stringify(dailyChannels, null, 2));
+}
 
 // ============================
-// SLASH COMMAND SETUP
+// SLASH COMMANDS
 // ============================
 const commands = [
   new SlashCommandBuilder()
     .setName("verse")
     .setDescription("Get a Bible verse")
-    .addStringOption(option =>
-      option.setName("reference")
-        .setDescription("Optional: specify a verse, e.g. John 3:16")
-        .setRequired(false)
-    ),
+    .addStringOption(opt => opt.setName("reference").setDescription("e.g. John 3:16").setRequired(false)),
 
   new SlashCommandBuilder()
     .setName("ping")
@@ -69,34 +89,22 @@ const commands = [
   new SlashCommandBuilder()
     .setName("say")
     .setDescription("Bot repeats your message")
-    .addStringOption(option =>
-      option.setName("message")
-        .setDescription("Message for the bot to say")
-        .setRequired(true)
-    ),
+    .addStringOption(opt => opt.setName("message").setDescription("Message to repeat").setRequired(true)),
 
   new SlashCommandBuilder()
     .setName("setdailychannel")
     .setDescription("Set the channel for daily Bible verses")
-    .addChannelOption(option =>
-      option.setName("channel")
-        .setDescription("The channel where daily verses will be sent")
-        .setRequired(true)
-    )
-].map(command => command.toJSON());
+    .addChannelOption(opt => opt.setName("channel").setDescription("Channel for daily verse").setRequired(true))
+].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-
 (async () => {
   try {
-    console.log("🔄 Registering slash commands...");
-    await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID), 
-      { body: commands },
-    );
-    console.log("✅ Slash commands registered");
-  } catch (error) {
-    console.error(error);
+    console.log("🔄 Registering commands...");
+    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
+    console.log("✅ Commands registered");
+  } catch (err) {
+    console.error(err);
   }
 })();
 
@@ -106,56 +114,53 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 client.on("interactionCreate", async interaction => {
   if (!interaction.isCommand()) return;
 
-  // ---------- Bible Commands ----------
-  if (interaction.commandName === "verse") {
-    const reference = interaction.options.getString("reference");
+  const guildId = interaction.guildId;
 
-    try {
-      let verseData;
-      if (reference) {
-        verseData = await getVerse(reference);
-      } else {
-        verseData = await getRandomVerse();
-      }
-      await interaction.reply(`📖 **${verseData.reference}**\n${verseData.text}`);
-    } catch (error) {
-      await interaction.reply("⚠️ Could not find that verse. Try `John 3:16`");
+  try {
+    if (interaction.commandName === "verse") {
+      const reference = interaction.options.getString("reference");
+      const verse = reference ? await getVerse(reference) : await getRandomVerse();
+      await interaction.reply(`📖 **${verse.reference}**\n${verse.text}`);
     }
-  }
 
-  // ---------- Basic Discord Commands ----------
-  if (interaction.commandName === "ping") {
-    await interaction.reply("🏓 Pong! I'm online and ready!");
-  }
+    if (interaction.commandName === "ping") {
+      await interaction.reply("🏓 Pong! I'm online!");
+    }
 
-  if (interaction.commandName === "say") {
-    const msg = interaction.options.getString("message");
-    await interaction.reply(msg);
-  }
+    if (interaction.commandName === "say") {
+      const msg = interaction.options.getString("message");
+      await interaction.reply(msg);
+    }
 
-  // ---------- Daily Verse Commands ----------
-  if (interaction.commandName === "setdailychannel") {
-    const channel = interaction.options.getChannel("channel");
-    dailyVerseChannelId = channel.id;
-    await interaction.reply(`✅ Daily Bible verses will be sent to ${channel}`);
+    if (interaction.commandName === "setdailychannel") {
+      const channel = interaction.options.getChannel("channel");
+      dailyChannels[guildId] = channel.id;
+      saveChannels();
+      await interaction.reply(`✅ Daily Bible verses will be sent to ${channel}`);
+    }
+  } catch (err) {
+    console.error("Command error:", err);
+    await interaction.reply("⚠️ Something went wrong while executing this command.");
   }
 });
 
 // ============================
 // DAILY VERSE SENDER
 // ============================
-// Check every hour and send verse if channel is set
 setInterval(async () => {
-  if (!dailyVerseChannelId) return;
+  for (const guildId in dailyChannels) {
+    const channelId = dailyChannels[guildId];
+    try {
+      const channel = await client.channels.fetch(channelId);
+      if (!channel) continue;
 
-  try {
-    const verse = await getRandomVerse();
-    const channel = await client.channels.fetch(dailyVerseChannelId);
-    channel.send(`📖 **Daily Verse**\n**${verse.reference}**\n${verse.text}`);
-  } catch (err) {
-    console.error("Failed to send daily verse:", err);
+      const verse = await getRandomVerse();
+      await channel.send(`📖 **Daily Verse**\n**${verse.reference}**\n${verse.text}`);
+    } catch (err) {
+      console.error(`Failed sending daily verse to guild ${guildId}:`, err.message);
+    }
   }
-}, 60 * 60 * 1000); // every 1 hour (can adjust as needed)
+}, 60 * 60 * 1000); // every 1 hour (can set 24h)
 
 // ============================
 // LOGIN
