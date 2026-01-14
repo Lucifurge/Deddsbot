@@ -1,4 +1,3 @@
-require("dotenv").config();
 const { 
   Client, 
   GatewayIntentBits, 
@@ -10,7 +9,7 @@ const express = require("express");
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
-const { Configuration, OpenAIApi } = require("openai");
+const OpenAI = require("openai"); // FIXED
 
 /* =========================
    CRASH PROTECTION
@@ -52,9 +51,7 @@ let devotionChannels = load(devotionFile);
 /* =========================
    OPENAI CONFIG
 ========================= */
-const openai = new OpenAIApi(new Configuration({
-  apiKey: process.env.OPENAI_API_KEY
-}));
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY }); // FIXED
 
 /* =========================
    SAFE API HELPERS
@@ -75,7 +72,7 @@ async function safeMeme() {
 
 async function generateDevotion() {
   try {
-    const res = await openai.createChatCompletion({
+    const res = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [
         { role: "system", content: "You are a Christian devotion writer. Provide a short, daily devotional with a Bible verse, reflection, and encouragement." },
@@ -83,7 +80,7 @@ async function generateDevotion() {
       ],
       max_tokens: 300
     });
-    return res.data.choices[0].message.content;
+    return res.choices[0].message.content;
   } catch (err) {
     console.error("OpenAI error:", err.message);
     return null;
