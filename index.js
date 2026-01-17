@@ -1,73 +1,116 @@
 require("dotenv").config();
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require("discord.js");
+const {
+  Client,
+  GatewayIntentBits,
+  REST,
+  Routes,
+  SlashCommandBuilder
+} = require("discord.js");
 const express = require("express");
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 
 /* =========================
-   EXPRESS KEEP ALIVE
+   SAFETY
+========================= */
+process.on("unhandledRejection", console.error);
+process.on("uncaughtException", console.error);
+
+/* =========================
+   EXPRESS
 ========================= */
 const app = express();
 app.get("/", (_, res) => res.send("Bot alive"));
-app.listen(process.env.PORT || 3000, () => console.log("✅ Express running"));
+app.listen(process.env.PORT || 3000);
 
 /* =========================
-   DISCORD CLIENT
+   CLIENT
 ========================= */
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
+const startTime = Date.now();
+
 /* =========================
-   FILE STORAGE
+   STORAGE
 ========================= */
-const verseFile = path.join(__dirname, "dailyVerse.json");
-const channelFile = path.join(__dirname, "verseChannels.json");
+const verseChannelFile = path.join(__dirname, "dailyVerseChannels.json");
+const memeChannelFile = path.join(__dirname, "memeChannels.json");
 
 const load = f => fs.existsSync(f) ? JSON.parse(fs.readFileSync(f)) : {};
 const save = (f, d) => fs.writeFileSync(f, JSON.stringify(d, null, 2));
 
-let dailyVerses = load(verseFile);
-let verseChannels = load(channelFile);
+let verseChannels = load(verseChannelFile);
+let memeChannels = load(memeChannelFile);
 
 /* =========================
-   BIBLE API FETCH
+   APIs
 ========================= */
-async function getVerse(verseName) {
+async function randomVerse() {
   try {
-    const r = await axios.get(`https://bible-api.com/${encodeURIComponent(verseName)}`);
+    const r = await axios.get("https://bible-api.com/?random=verse");
     return `📖 **${r.data.reference}**\n${r.data.text.trim()}`;
   } catch {
     return null;
   }
 }
 
+async function fetchVerse(ref) {
+  try {
+    const r = await axios.get(
+      `https://bible-api.com/${encodeURIComponent(ref)}`
+    );
+    return `📖 **${r.data.reference}**\n${r.data.text.trim()}`;
+  } catch {
+    return null;
+  }
+}
+
+async function safeMeme() {
+  try {
+    const r = await axios.get("https://meme-api.com/gimme");
+    return r.data;
+  } catch {
+    return null;
+  }
+}
+
 /* =========================
-   SLASH COMMANDS
+   COMMANDS
 ========================= */
 const commands = [
-  new SlashCommandBuilder()
-    .setName("addverse")
-    .setDescription("Add a Bible verse (type only verse name)")
-    .addStringOption(o =>
-      o.setName("verse")
-       .setDescription("Example: John 3:16")
-       .setRequired(true)
-    ),
+  new SlashCommandBuilder().setName("ping").setDescription("Check bot status"),
+  new SlashCommandBuilder().setName("uptime").setDescription("Bot uptime"),
+  new SlashCommandBuilder().setName("help").setDescription("Show commands"),
 
   new SlashCommandBuilder()
     .setName("setdailyverse")
-    .setDescription("Set the channel for the daily Bible verse")
+    .setDescription("Set channel for random daily Bible verse")
     .addChannelOption(o =>
-      o.setName("channel")
-       .setDescription("Channel for daily verse")
-       .setRequired(true)
-    )
+      o.setName("channel").setDescription("Daily verse channel").setRequired(true)
+    ),
+
+  new SlashCommandBuilder()
+    .setName("addverse")
+    .setDescription("Post a specific Bible verse")
+    .addStringOption(o =>
+      o.setName("verse").setDescription("Example: John 3:16").setRequired(true)
+    ),
+
+  new SlashCommandBuilder()
+    .setName("setmemeschannel")
+    .setDescription("Set meme channel")
+    .addChannelOption(o =>
+      o.setName("channel").setDescription("Meme channel").setRequired(true)
+    ),
+
+  new SlashCommandBuilder().setName("meme").setDescription("Get a meme")
 ].map(c => c.toJSON());
 
 /* =========================
-   REGISTER COMMANDS
+   REGISTER
 ========================= */
 const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 (async () => {
@@ -79,69 +122,106 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 })();
 
 /* =========================
-   COMMAND HANDLER
+   HANDLER
 ========================= */
 client.on("interactionCreate", async i => {
   if (!i.isCommand()) return;
 
-  if (i.commandName === "addverse") {
-    const verse = i.options.getString("verse");
-    const fetched = await getVerse(verse);
+  try {
+    switch (i.commandName) {
 
-    if (!fetched) {
-      return i.reply("❌ Verse not found. Please check the verse name.");
+      case "ping":
+        return i.reply("🟢 Bot Online");
+
+      case "uptime":
+        return i.reply(
+          `⏱ Uptime: ${Math.floor((Date.now() - startTime) / 1000)}s`
+        );
+
+      case "help":
+        return i.reply(
+          "**📜 Commands**\n" +
+          "/ping\n/uptime\n/meme\n" +
+          "/setdailyverse\n/addverse\n/setmemeschannel"
+        );
+
+      case "setdailyverse": {
+        const channel = i.options.getChannel("channel");
+        verseChannels[i.guildId] = channel.id;
+        save(verseChannelFile, verseChannels);
+
+        const verse = await randomVerse();
+        if (verse) await channel.send(verse);
+
+        return i.reply("✅ Daily verse enabled and posted!");
+      }
+
+      case "addverse": {
+        const ref = i.options.getString("verse");
+        const verse = await fetchVerse(ref);
+        return i.reply(
+          verse ? verse : "❌ Verse not found. Example: John 3:16"
+        );
+      }
+
+      case "setmemeschannel":
+        memeChannels[i.guildId] = i.options.getChannel("channel").id;
+        save(memeChannelFile, memeChannels);
+        return i.reply("✅ Meme channel set");
+
+      case "meme": {
+        const m = await safeMeme();
+        return i.reply(m ? { files: [m.url] } : "No meme available");
+      }
     }
-
-    dailyVerses[i.guildId] = verse;
-    save(verseFile, dailyVerses);
-
-    return i.reply(`✅ Daily verse set to **${verse}**`);
-  }
-
-  if (i.commandName === "setdailyverse") {
-    const channel = i.options.getChannel("channel");
-    const verseName = dailyVerses[i.guildId];
-
-    if (!verseName) {
-      return i.reply("⚠️ Please add a verse first using /addverse");
-    }
-
-    verseChannels[i.guildId] = channel.id;
-    save(channelFile, verseChannels);
-
-    const verseText = await getVerse(verseName);
-    if (verseText) await channel.send(verseText);
-
-    return i.reply("✅ Daily verse channel set and verse posted!");
+  } catch (e) {
+    console.error(e);
+    if (!i.replied) i.reply("⚠️ Error handled");
   }
 });
 
 /* =========================
-   DAILY AUTO POST (24H)
+   JOBS
 ========================= */
-setInterval(async () => {
-  for (const guildId in verseChannels) {
-    try {
-      const channel = await client.channels.fetch(verseChannels[guildId]);
-      const verseName = dailyVerses[guildId];
-      if (!channel || !verseName) continue;
+function startJobs() {
 
-      const verseText = await getVerse(verseName);
-      if (verseText) channel.send(verseText);
-    } catch (e) {
-      console.error("Daily verse error:", e);
+  // DAILY RANDOM VERSE
+  setInterval(async () => {
+    for (const g in verseChannels) {
+      try {
+        const c = await client.channels.fetch(verseChannels[g]);
+        if (!c) continue;
+
+        const verse = await randomVerse();
+        if (verse) c.send(verse);
+      } catch (e) {
+        console.error("Verse job error:", e);
+      }
     }
-  }
-}, 24 * 60 * 60 * 1000);
+  }, 24 * 60 * 60 * 1000);
+
+  // HOURLY MEMES
+  setInterval(async () => {
+    for (const g in memeChannels) {
+      try {
+        const c = await client.channels.fetch(memeChannels[g]);
+        const m = await safeMeme();
+        if (c && m) {
+          c.send({ content: "😂 **Hourly Meme**", files: [m.url] });
+        }
+      } catch (e) {
+        console.error("Meme job error:", e);
+      }
+    }
+  }, 60 * 60 * 1000);
+}
 
 /* =========================
    READY
 ========================= */
 client.once("ready", () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
+  startJobs();
 });
 
-/* =========================
-   LOGIN
-========================= */
 client.login(process.env.TOKEN);
