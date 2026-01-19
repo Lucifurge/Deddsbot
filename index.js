@@ -1,254 +1,230 @@
-require("dotenv").config();
-const {
-  Client,
-  GatewayIntentBits,
-  REST,
-  Routes,
-  SlashCommandBuilder
-} = require("discord.js");
-const express = require("express");
-const axios = require("axios");
-const fs = require("fs");
-const path = require("path");
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BIBLE ENGINE BOT Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-/* =========================
-   SAFETY
-========================= */
-process.on("unhandledRejection", console.error);
-process.on("uncaughtException", console.error);
+<style>
+:root {
+  --green: #1db954;
+  --gold: #f5c542;
+  --dark: #0b1a12;
+  --card: #11261a;
+  --white: #ffffff;
+  --accent: #00ffcc;
+  --bg-gradient: linear-gradient(180deg, #08140d, #0b1a12);
+}
 
-/* =========================
-   EXPRESS & FRONTEND
-========================= */
-const app = express();
-app.use(express.json());
-app.use(express.static("public")); // Serve static files (CSS/JS/images)
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: var(--bg-gradient);
+  color: var(--white);
+  min-height: 100vh;
+}
 
-app.get("/", (_, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+/* ===== NAVBAR ===== */
+nav {
+  background: var(--card);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 25px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+  border-bottom: 1px solid rgba(245,197,66,0.2);
+}
+nav h1 { font-size: 1.8rem; color: var(--green); letter-spacing: 1px; }
+nav h1 span { color: var(--gold); }
+nav a { color: var(--white); text-decoration: none; margin-left: 20px; transition: color 0.2s; font-weight: bold;}
+nav a:hover { color: var(--gold); }
 
-// API: Bot status
-app.get("/api/status", (_, res) => {
-  res.json({
-    name: "FEBIASBOTS",
-    online: client.isReady(),
-    uptime: Math.floor((Date.now() - startTime) / 1000),
-    servers: client.guilds?.cache.size || 0
-  });
-});
+/* ===== HEADER ===== */
+header { text-align: center; padding: 40px 20px; }
+header p { margin-top: 10px; opacity: 0.8; font-size: 1.1rem; }
 
-// API: Commands list
-app.get("/api/commands", (_, res) => {
-  res.json([
-    { name: "/ping", desc: "Check bot status" },
-    { name: "/uptime", desc: "Bot uptime" },
-    { name: "/help", desc: "Show commands" },
-    { name: "/setdailyverse", desc: "Set daily Bible verse channel" },
-    { name: "/addverse", desc: "Post a specific Bible verse" },
-    { name: "/setmemeschannel", desc: "Set meme channel" },
-    { name: "/meme", desc: "Get a meme" }
-  ]);
-});
+/* ===== GRID CONTAINER ===== */
+.container {
+  max-width: 1200px;
+  margin: auto;
+  padding: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 25px;
+}
 
-app.listen(process.env.PORT || 3000, () =>
-  console.log("🌐 Web server running")
-);
+/* ===== CARD STYLES ===== */
+.card {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 25px;
+  box-shadow: 0 0 25px rgba(0,0,0,0.4);
+  border: 1px solid rgba(245,197,66,0.1);
+  position: relative;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.card:hover { transform: translateY(-5px); box-shadow: 0 15px 30px rgba(29,185,84,0.6); }
+.card h2 { color: var(--gold); margin-bottom: 15px; font-size: 1.4rem; }
 
-/* =========================
-   DISCORD CLIENT
-========================= */
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
-});
-const startTime = Date.now();
+/* ===== STATUS ===== */
+.status { font-size: 1.1rem; line-height: 1.7; }
+.online { color: var(--green); font-weight: bold; }
+.offline { color: #ff5c5c; font-weight: bold; }
 
-/* =========================
-   STORAGE
-========================= */
-const verseChannelFile = path.join(__dirname, "dailyVerseChannels.json");
-const memeChannelFile = path.join(__dirname, "memeChannels.json");
+/* ===== COMMANDS ===== */
+.command { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.command:last-child { border-bottom: none; }
+.command-name { color: var(--green); font-weight: 600; }
+.command-desc { opacity: 0.8; font-size: 0.95rem; }
 
-const load = f => fs.existsSync(f) ? JSON.parse(fs.readFileSync(f)) : {};
-const save = (f, d) => fs.writeFileSync(f, JSON.stringify(d, null, 2));
+/* ===== LOG TABLE ===== */
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th, td { padding: 8px 6px; text-align: left; font-size: 0.95rem; }
+th { color: var(--gold); border-bottom: 1px solid rgba(245,197,66,0.3); }
+td { border-bottom: 1px solid rgba(255,255,255,0.08); }
 
-let verseChannels = load(verseChannelFile);
-let memeChannels = load(memeChannelFile);
+/* ===== BUTTON ===== */
+.button {
+  display: inline-block;
+  margin-top: 15px;
+  padding: 12px 22px;
+  background: linear-gradient(135deg, var(--green), var(--gold));
+  color: #0b1a12;
+  font-weight: bold;
+  border-radius: 30px;
+  text-decoration: none;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.button:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(29,185,84,0.4); }
 
-/* =========================
-   APIs
-========================= */
-async function randomVerse() {
+/* ===== FOOTER ===== */
+footer { text-align: center; padding: 25px; opacity: 0.7; font-size: 0.9rem; }
+
+</style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav>
+  <h1>BIBLE ENGINE <span>BOT</span></h1>
+  <div>
+    <a href="/">Home</a>
+    <a href="https://your-second-bot-link.com" target="_blank">BIBLE HELPER BOT</a>
+  </div>
+</nav>
+
+<header>
+  <p>Powerful • Faith-Centered • Multi-Purpose Discord Bot</p>
+</header>
+
+<section class="container">
+
+  <div class="card">
+    <h2>🤖 Bot Status</h2>
+    <div id="status" class="status">Loading status...</div>
+  </div>
+
+  <div class="card">
+    <h2>📜 Commands</h2>
+    <div id="commands">Loading commands...</div>
+  </div>
+
+  <div class="card">
+    <h2>📊 Statistics</h2>
+    <div id="stats">
+      <p>Loading stats...</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📝 Command Log</h2>
+    <table id="log">
+      <thead>
+        <tr><th>Command</th><th>User</th><th>Time</th></tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="3">Loading log...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>🚀 Get Started</h2>
+    <p>BIBLE ENGINE BOT brings Bible verses, memes, and automation into your Discord server with simplicity and power.</p>
+    <a class="button" href="https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=8&scope=bot%20applications.commands">Invite to Discord</a>
+  </div>
+
+</section>
+
+<footer>
+  © 2026 FEBIASBOTS • Made by <strong>Dev Zap</strong>, <strong>Dev Luke</strong>, and <strong>Dev Aether</strong>
+</footer>
+
+<script>
+// Fetch bot status
+async function loadStatus() {
   try {
-    const r = await axios.get("https://bible-api.com/?random=verse");
-    return `📖 **${r.data.reference}**\n${r.data.text.trim()}`;
+    const res = await fetch("/api/status");
+    const data = await res.json();
+    document.getElementById("status").innerHTML = `
+      <div>Status: <span class="${data.online ? "online" : "offline"}">
+        ${data.online ? "ONLINE" : "OFFLINE"}</span></div>
+      <div>Uptime: ${data.uptime}s</div>
+      <div>Servers: ${data.servers}</div>
+    `;
+    document.getElementById("stats").innerHTML = `
+      <p>Total Servers: ${data.servers}</p>
+      <p>Uptime: ${data.uptime}s</p>
+      <p>Commands Used: ${data.commandsUsed || 0}</p>
+      <p>Currently Executing: ${data.currentCommand || "None"}</p>
+    `;
   } catch {
-    return null;
+    document.getElementById("status").innerText = "Failed to load status";
+    document.getElementById("stats").innerText = "";
   }
 }
 
-async function fetchVerse(ref) {
+// Fetch commands list
+async function loadCommands() {
   try {
-    const r = await axios.get(
-      `https://bible-api.com/${encodeURIComponent(ref)}`
-    );
-    return `📖 **${r.data.reference}**\n${r.data.text.trim()}`;
+    const res = await fetch("/api/commands");
+    const commands = await res.json();
+    const container = document.getElementById("commands");
+    container.innerHTML = "";
+    commands.forEach(c => {
+      const div = document.createElement("div");
+      div.className = "command";
+      div.innerHTML = `<div class="command-name">${c.name}</div><div class="command-desc">${c.desc}</div>`;
+      container.appendChild(div);
+    });
   } catch {
-    return null;
+    document.getElementById("commands").innerText = "Failed to load commands";
   }
 }
 
-async function safeMeme() {
+// Fetch command log
+async function loadLog() {
   try {
-    const r = await axios.get("https://meme-api.com/gimme");
-    return r.data;
+    const res = await fetch("/api/log");
+    const log = await res.json();
+    const tbody = document.querySelector("#log tbody");
+    tbody.innerHTML = "";
+    log.forEach(entry => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${entry.command}</td><td>${entry.user}</td><td>${entry.time}</td>`;
+      tbody.appendChild(tr);
+    });
   } catch {
-    return null;
+    const tbody = document.querySelector("#log tbody");
+    tbody.innerHTML = "<tr><td colspan='3'>Failed to load log</td></tr>";
   }
 }
 
-/* =========================
-   COMMANDS
-========================= */
-const commands = [
-  new SlashCommandBuilder().setName("ping").setDescription("Check bot status"),
-  new SlashCommandBuilder().setName("uptime").setDescription("Bot uptime"),
-  new SlashCommandBuilder().setName("help").setDescription("Show commands"),
+loadStatus();
+loadCommands();
+loadLog();
+setInterval(() => { loadStatus(); loadLog(); }, 5000); // refresh every 5s
+</script>
 
-  new SlashCommandBuilder()
-    .setName("setdailyverse")
-    .setDescription("Set channel for random daily Bible verse")
-    .addChannelOption(o =>
-      o.setName("channel").setDescription("Daily verse channel").setRequired(true)
-    ),
-
-  new SlashCommandBuilder()
-    .setName("addverse")
-    .setDescription("Post a specific Bible verse")
-    .addStringOption(o =>
-      o.setName("verse").setDescription("Example: John 3:16").setRequired(true)
-    ),
-
-  new SlashCommandBuilder()
-    .setName("setmemeschannel")
-    .setDescription("Set meme channel")
-    .addChannelOption(o =>
-      o.setName("channel").setDescription("Meme channel").setRequired(true)
-    ),
-
-  new SlashCommandBuilder().setName("meme").setDescription("Get a meme")
-].map(c => c.toJSON());
-
-/* =========================
-   REGISTER
-========================= */
-const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
-(async () => {
-  await rest.put(
-    Routes.applicationCommands(process.env.CLIENT_ID),
-    { body: commands }
-  );
-  console.log("✅ Commands registered");
-})();
-
-/* =========================
-   HANDLER
-========================= */
-client.on("interactionCreate", async i => {
-  if (!i.isCommand()) return;
-
-  try {
-    switch (i.commandName) {
-
-      case "ping":
-        return i.reply("🟢 Bot Online");
-
-      case "uptime":
-        return i.reply(
-          `⏱ Uptime: ${Math.floor((Date.now() - startTime) / 1000)}s`
-        );
-
-      case "help":
-        return i.reply(
-          "**📜 Commands**\n" +
-          "/ping\n/uptime\n/meme\n" +
-          "/setdailyverse\n/addverse\n/setmemeschannel"
-        );
-
-      case "setdailyverse": {
-        const channel = i.options.getChannel("channel");
-        verseChannels[i.guildId] = channel.id;
-        save(verseChannelFile, verseChannels);
-
-        const verse = await randomVerse();
-        if (verse) await channel.send(verse);
-
-        return i.reply("✅ Daily verse enabled and posted!");
-      }
-
-      case "addverse": {
-        const ref = i.options.getString("verse");
-        const verse = await fetchVerse(ref);
-        return i.reply(
-          verse ? verse : "❌ Verse not found. Example: John 3:16"
-        );
-      }
-
-      case "setmemeschannel":
-        memeChannels[i.guildId] = i.options.getChannel("channel").id;
-        save(memeChannelFile, memeChannels);
-        return i.reply("✅ Meme channel set");
-
-      case "meme": {
-        const m = await safeMeme();
-        return i.reply(m ? { files: [m.url] } : "No meme available");
-      }
-    }
-  } catch (e) {
-    console.error(e);
-    if (!i.replied) i.reply("⚠️ Error handled");
-  }
-});
-
-/* =========================
-   JOBS
-========================= */
-function startJobs() {
-  setInterval(async () => {
-    for (const g in verseChannels) {
-      try {
-        const c = await client.channels.fetch(verseChannels[g]);
-        if (!c) continue;
-
-        const verse = await randomVerse();
-        if (verse) c.send(verse);
-      } catch (e) {
-        console.error("Verse job error:", e);
-      }
-    }
-  }, 24 * 60 * 60 * 1000);
-
-  setInterval(async () => {
-    for (const g in memeChannels) {
-      try {
-        const c = await client.channels.fetch(memeChannels[g]);
-        const m = await safeMeme();
-        if (c && m) {
-          c.send({ content: "😂 **Hourly Meme**", files: [m.url] });
-        }
-      } catch (e) {
-        console.error("Meme job error:", e);
-      }
-    }
-  }, 60 * 60 * 1000);
-}
-
-/* =========================
-   READY
-========================= */
-client.once("ready", () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
-  startJobs();
-});
-
-client.login(process.env.TOKEN);
+</body>
+</html>
