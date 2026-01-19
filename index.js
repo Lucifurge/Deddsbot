@@ -18,20 +18,17 @@ process.on("unhandledRejection", console.error);
 process.on("uncaughtException", console.error);
 
 /* =========================
-   EXPRESS
+   EXPRESS & FRONTEND
 ========================= */
 const app = express();
-
-// NEW: middleware
 app.use(express.json());
-app.use(express.static("public"));
+app.use(express.static("public")); // Serve static files (CSS/JS/images)
 
-// NEW: frontend homepage
 app.get("/", (_, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// NEW: frontend APIs
+// API: Bot status
 app.get("/api/status", (_, res) => {
   res.json({
     name: "FEBIASBOTS",
@@ -41,6 +38,7 @@ app.get("/api/status", (_, res) => {
   });
 });
 
+// API: Commands list
 app.get("/api/commands", (_, res) => {
   res.json([
     { name: "/ping", desc: "Check bot status" },
@@ -58,12 +56,11 @@ app.listen(process.env.PORT || 3000, () =>
 );
 
 /* =========================
-   CLIENT
+   DISCORD CLIENT
 ========================= */
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
-
 const startTime = Date.now();
 
 /* =========================
@@ -217,7 +214,6 @@ client.on("interactionCreate", async i => {
    JOBS
 ========================= */
 function startJobs() {
-
   setInterval(async () => {
     for (const g in verseChannels) {
       try {
