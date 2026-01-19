@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FEBIASBOTS</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+:root {
+  --green: #1db954;
+  --gold: #f5c542;
+  --dark: #0b1a12;
+  --card: #11261a;
+  --white: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: linear-gradient(180deg, #08140d, #0b1a12);
+  color: var(--white);
+  min-height: 100vh;
+}
+
+/* ===== HEADER ===== */
+header {
+  padding: 40px 20px;
+  text-align: center;
+}
+
+header h1 {
+  font-size: 3rem;
+  color: var(--green);
+  letter-spacing: 2px;
+}
+
+header span {
+  color: var(--gold);
+}
+
+header p {
+  margin-top: 10px;
+  opacity: 0.85;
+}
+
+/* ===== CONTAINER ===== */
+.container {
+  max-width: 1100px;
+  margin: auto;
+  padding: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 25px;
+}
+
+/* ===== CARDS ===== */
+.card {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 25px;
+  box-shadow: 0 0 25px rgba(0,0,0,0.4);
+  border: 1px solid rgba(245,197,66,0.1);
+}
+
+.card h2 {
+  color: var(--gold);
+  margin-bottom: 15px;
+  font-size: 1.4rem;
+}
+
+/* ===== STATUS ===== */
+.status {
+  font-size: 1.1rem;
+  line-height: 1.7;
+}
+
+.online {
+  color: var(--green);
+  font-weight: bold;
+}
+
+.offline {
+  color: #ff5c5c;
+  font-weight: bold;
+}
+
+/* ===== COMMANDS ===== */
+.command {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.command:last-child {
+  border-bottom: none;
+}
+
+.command-name {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.command-desc {
+  opacity: 0.8;
+  font-size: 0.95rem;
+}
+
+/* ===== BUTTON ===== */
+.button {
+  display: inline-block;
+  margin-top: 15px;
+  padding: 12px 22px;
+  background: linear-gradient(135deg, var(--green), var(--gold));
+  color: #0b1a12;
+  font-weight: bold;
+  border-radius: 30px;
+  text-decoration: none;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(29,185,84,0.4);
+}
+
+/* ===== FOOTER ===== */
+footer {
+  text-align: center;
+  padding: 25px;
+  opacity: 0.7;
+  font-size: 0.9rem;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>FEBIAS<span>BOTS</span></h1>
+  <p>Powerful • Faith-Centered • Multi-Purpose Discord Bot</p>
+</header>
+
+<section class="container">
+
+  <div class="card">
+    <h2>🤖 Bot Status</h2>
+    <div id="status" class="status">Loading status...</div>
+  </div>
+
+  <div class="card">
+    <h2>📜 Commands</h2>
+    <div id="commands">Loading commands...</div>
+  </div>
+
+  <div class="card">
+    <h2>🚀 Get Started</h2>
+    <p>
+      FEBIASBOTS brings Bible verses, memes, and automation into your Discord
+      server with simplicity and power.
+    </p>
+    <a class="button" href="https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=8&scope=bot%20applications.commands">
+      Invite to Discord
+    </a>
+  </div>
+
+</section>
+
+<footer>
+  © 2026 FEBIASBOTS • Built with 💚 & ✨
+</footer>
+
+<script>
+async function loadStatus() {
+  try {
+    const res = await fetch("/api/status");
+    const data = await res.json();
+
+    document.getElementById("status").innerHTML = `
+      <div>Status: <span class="${data.online ? "online" : "offline"}">
+        ${data.online ? "ONLINE" : "OFFLINE"}
+      </span></div>
+      <div>Uptime: ${data.uptime}s</div>
+      <div>Servers: ${data.servers}</div>
+    `;
+  } catch {
+    document.getElementById("status").innerText = "Failed to load status";
+  }
+}
+
+async function loadCommands() {
+  try {
+    const res = await fetch("/api/commands");
+    const commands = await res.json();
+
+    const container = document.getElementById("commands");
+    container.innerHTML = "";
+
+    commands.forEach(c => {
+      const div = document.createElement("div");
+      div.className = "command";
+      div.innerHTML = `
+        <div class="command-name">${c.name}</div>
+        <div class="command-desc">${c.desc}</div>
+      `;
+      container.appendChild(div);
+    });
+  } catch {
+    document.getElementById("commands").innerText = "Failed to load commands";
+  }
+}
+
+loadStatus();
+loadCommands();
+setInterval(loadStatus, 10000);
+</script>
+
+</body>
+</html>
