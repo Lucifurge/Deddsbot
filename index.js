@@ -21,8 +21,41 @@ process.on("uncaughtException", console.error);
    EXPRESS
 ========================= */
 const app = express();
-app.get("/", (_, res) => res.send("Bot alive"));
-app.listen(process.env.PORT || 3000);
+
+// NEW: middleware
+app.use(express.json());
+app.use(express.static("public"));
+
+// NEW: frontend homepage
+app.get("/", (_, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// NEW: frontend APIs
+app.get("/api/status", (_, res) => {
+  res.json({
+    name: "FEBIASBOTS",
+    online: client.isReady(),
+    uptime: Math.floor((Date.now() - startTime) / 1000),
+    servers: client.guilds?.cache.size || 0
+  });
+});
+
+app.get("/api/commands", (_, res) => {
+  res.json([
+    { name: "/ping", desc: "Check bot status" },
+    { name: "/uptime", desc: "Bot uptime" },
+    { name: "/help", desc: "Show commands" },
+    { name: "/setdailyverse", desc: "Set daily Bible verse channel" },
+    { name: "/addverse", desc: "Post a specific Bible verse" },
+    { name: "/setmemeschannel", desc: "Set meme channel" },
+    { name: "/meme", desc: "Get a meme" }
+  ]);
+});
+
+app.listen(process.env.PORT || 3000, () =>
+  console.log("🌐 Web server running")
+);
 
 /* =========================
    CLIENT
@@ -185,7 +218,6 @@ client.on("interactionCreate", async i => {
 ========================= */
 function startJobs() {
 
-  // DAILY RANDOM VERSE
   setInterval(async () => {
     for (const g in verseChannels) {
       try {
@@ -200,7 +232,6 @@ function startJobs() {
     }
   }, 24 * 60 * 60 * 1000);
 
-  // HOURLY MEMES
   setInterval(async () => {
     for (const g in memeChannels) {
       try {
