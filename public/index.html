@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <title>BIBLE ENGINE BOT</title>
-  <link rel="icon" type="image/x-icon" href="logo.ico">
+<link rel="icon" type="image/x-icon" href="logo.ico">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
 
 <style>
 :root {
@@ -18,8 +19,8 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: "Segoe UI", system-ui, sans-serif;
-  background: linear-gradient(180deg, #08140d, #0b1a12);
+  font-family: "Montserrat", sans-serif;
+  background: linear-gradient(180deg,#08140d,#0b1a12);
   color: var(--white);
   min-height: 100vh;
 }
@@ -36,9 +37,9 @@ nav {
 nav a {
   color: var(--green);
   text-decoration: none;
-  font-weight: bold;
+  font-weight: 600;
   margin-left: 20px;
-  transition: 0.2s;
+  transition: 0.3s;
 }
 nav a:hover { color: var(--gold); }
 
@@ -72,23 +73,26 @@ header p { margin-top: 8px; opacity: 0.85; }
   padding: 25px;
   box-shadow: 0 0 25px rgba(0,0,0,0.4);
   border: 1px solid rgba(245,197,66,0.1);
+  transition: transform 0.3s, box-shadow 0.3s;
 }
+.card:hover { transform: translateY(-5px); box-shadow:0 12px 25px rgba(29,185,84,0.5); }
 .card h2 { color: var(--gold); margin-bottom: 15px; font-size: 1.4rem; }
 .status, .commands, .logs { font-size: 1rem; line-height: 1.7; }
 .online { color: var(--green); font-weight: bold; }
 .offline { color: #ff5c5c; font-weight: bold; }
+
 .command { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.08);}
 .command:last-child { border-bottom: none; }
 .command-name { color: var(--green); font-weight: 600; }
 .command-desc { opacity: 0.8; font-size: 0.95rem; }
 
-/* ===== BUTTON ===== */
+/* ===== INVITE BUTTON ===== */
 .button {
   display: inline-block;
   margin-top: 15px;
   padding: 12px 22px;
   background: linear-gradient(135deg, var(--green), var(--gold));
-  color: #0b1a12;
+  color: var(--dark);
   font-weight: bold;
   border-radius: 30px;
   text-decoration: none;
@@ -106,6 +110,11 @@ footer {
   opacity: 0.7;
   font-size: 0.9rem;
 }
+
+/* ===== RESPONSIVE ===== */
+@media(max-width:768px){
+  nav a { margin-left: 10px; }
+}
 </style>
 </head>
 
@@ -116,7 +125,7 @@ footer {
   <div>BIBLE ENGINE BOT</div>
   <div>
     <a href="/">Dashboard</a>
-    <a href="]https://deddshelperbot.onrender.com/">BIBLE HELPER BOT</a>
+    <a href="https://deddshelperbot.onrender.com/" target="_blank">BIBLE HELPER BOT</a>
     <a href="https://biblebots-1shb.onrender.com/#bots">HOME</a>
   </div>
 </nav>
@@ -149,10 +158,8 @@ footer {
   <!-- INVITE BUTTON -->
   <div class="card">
     <h2>🚀 Get Started</h2>
-    <p>
-      Invite BIBLE ENGINE BOT to your server and access Bible verses, memes, and automation with ease.
-    </p>
-    <a class="button" href="https://discord.com/oauth2/authorize?client_id=1460782091116482602&permissions=8&integration_type=0&scope=bot">
+    <p>Invite BIBLE ENGINE BOT to your server and access Bible verses, memes, and automation with ease.</p>
+    <a class="button" href="https://discord.com/oauth2/authorize?client_id=1460782091116482602&permissions=8&scope=bot%20applications.commands" target="_blank">
       Invite to Discord
     </a>
   </div>
@@ -172,11 +179,11 @@ async function loadStatus() {
       <div>Status: <span class="${data.online ? "online" : "offline"}">
         ${data.online ? "ONLINE" : "OFFLINE"}
       </span></div>
-      <div>Uptime: ${data.uptime}s</div>
-      <div>Servers: ${data.servers}</div>
+      <div>Uptime: ${data.uptime || 0}s</div>
+      <div>Servers: ${data.servers || 0}</div>
     `;
   } catch {
-    document.getElementById("status").innerText = "Failed to load status";
+    document.getElementById("status").innerHTML = '<span class="offline">OFFLINE</span>';
   }
 }
 
@@ -199,7 +206,7 @@ async function loadCommands() {
 
 async function loadLogs() {
   try {
-    const res = await fetch("/api/log"); // NEW: command log API
+    const res = await fetch("/api/log");
     const logs = await res.json();
     const container = document.getElementById("logs");
     container.innerHTML = "";
@@ -217,7 +224,7 @@ loadStatus();
 loadCommands();
 loadLogs();
 setInterval(loadStatus, 10000);
-setInterval(loadLogs, 5000); // refresh logs every 5s
+setInterval(loadLogs, 5000);
 </script>
 
 </body>
